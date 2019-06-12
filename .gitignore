@@ -50,3 +50,6 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+/.vs/ConsoleGame/v16
+/ConsoleGame/Debug/
+/ConsoleGame/ConsoleGame.vcxproj.user
