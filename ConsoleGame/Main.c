@@ -180,6 +180,14 @@ void DeleteTimer()
 #pragma endregion
 
 int main(int argc, _TCHAR* argv[]) {
+	//------input-------
+	COORD speedV;
+	speedV.X = 1;
+	speedV.Y = 0;
+	COORD position;
+	position.X = 0;
+	position.Y = 3;
+	//--------next step validation----------
 	wHnd = GetStdHandle(STD_OUTPUT_HANDLE);
 
 	SetConsoleTitle(TEXT("Win32 Console Control Demo"));
@@ -201,16 +209,15 @@ int main(int argc, _TCHAR* argv[]) {
 	drawRec(a, charInfo);
 	drawScreen();
 	set_cursor_visible(0);
-	COORD speedV;
-	speedV.X = 1;
-	speedV.Y = 1;
+
 	SetTimer1();
 
 	int incrX=1;
 	int incrY = 1;
 	int width = abs(a.Top.X - a.Bottom.X);
-	int col = a.Top.X + 1;
-	int row = a.Top.Y + 1;
+	int col = a.Top.X + abs(a.Top.X - a.Bottom.X) / 2;
+	int row = a.Top.Y + abs(a.Top.Y - a.Bottom.Y) / 2;
+	
 	while (!_kbhit()) {
 		if (WaitForSingleObject(gDoneEvent, INFINITE) != WAIT_OBJECT_0) {
 			printf("WaitForSingleObject failed (%d)\n", GetLastError());
@@ -218,14 +225,15 @@ int main(int argc, _TCHAR* argv[]) {
 		}
 		ResetEvent(gDoneEvent);
 		setPixel((COORD) { col, row }, ' ', charInfo);
-		if (col == a.Bottom.X - 1)
+		
+		if (col >= a.Bottom.X - 1)
 			incrX = -1;
-		else if (col == a.Top.X + 1)
+		else if (col <= a.Top.X + 1)
 			incrX = 1;
 
-		if (row == a.Bottom.Y - 1)
+		if (row >= a.Bottom.Y - 1)
 			incrY = -1;
-		else if (row == a.Top.Y + 1)
+		else if (row <= a.Top.Y + 1)
 			incrY = 1;
 
 		col += incrX * speedV.X;
