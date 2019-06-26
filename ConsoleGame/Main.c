@@ -1,23 +1,22 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <math.h>
 #include <windows.h>
 #include <conio.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
 #include <direct.h>
 #include <time.h>
+#include <Tchar.h>
 
-#define MAX 255
-COORD coord;
-CHAR_INFO* mainchInfo;
+
 int GetKey();
-void InitProgram();
 #pragma region Threads.h
 
 HANDLE gDoneEvent = NULL;
 HANDLE hTimer = NULL;
 HANDLE hTimerQueue = NULL;
+HANDLE wHnd;    // Handle to write to the console.
+HANDLE rHnd;    // Handle to read from the console.
 
 VOID CALLBACK TimerRoutine(PVOID lpParam, BOOLEAN TimerOrWaitFired);
 
@@ -25,104 +24,43 @@ void DeleteTimer();
 #pragma endregion
 
 #pragma region Conlsole.h
-
+#define consoleWidth 190
+#define consoleHeight 40
+CHAR_INFO charInfo[consoleHeight * consoleWidth];
 CHAR_INFO* get_screen(COORD* cd);
 void set_cursor_visible(int Visible);
-void put_screen(COORD* cd, CHAR_INFO* buffer);
+void drawScreen();
 #pragma endregion
-char Caption[MAX];
+
 typedef struct sRect
 {
-	int Left;
-	int Top;
-	int Bottom;
-	int Right;
-} *pRect;
-
-struct sRect MainR;
-
-
-
-int main() {
-
-	int row = 5, col = 10;
-	int incr = 1;
-
-	char string[] = "Demo stirng";
-	char* temp;
-	unsigned char colour;
-
-	InitProgram();
-	set_cursor_visible(0);
-	mainchInfo[row * coord.X + col].Char.AsciiChar = '*';
-	mainchInfo[row * coord.X + col].Attributes = FOREGROUND_BLUE | FOREGROUND_INTENSITY;
-	put_screen(&coord, mainchInfo);
-
-	// string on row 6, start col 5
-
-	for (row = 6, col = 5, temp = string; *temp != 0; col++, temp++) {
-		mainchInfo[row * coord.X + col].Char.AsciiChar = *temp;
-		mainchInfo[row * coord.X + col].Attributes = FOREGROUND_RED | FOREGROUND_INTENSITY;
-
-	}
-	put_screen(&coord, mainchInfo);
-
-	// string on row 6, start col 5, colours changed
-
-	colour = 1;
-	for (row = 7, col = 5, temp = string; *temp != 0; col++, temp++) {
-		mainchInfo[row * coord.X + col].Char.AsciiChar = *temp;
-		mainchInfo[row * coord.X + col].Attributes = colour++;
-
-	}
-
-	row = 10;
-	col = 0;
-
-	mainchInfo[row * coord.X + col].Char.AsciiChar = '*';
-	mainchInfo[row * coord.X + col].Attributes = 0x0F;
-	put_screen(&coord, mainchInfo);
-	SetTimer1();
-
-	do {
-		if (WaitForSingleObject(gDoneEvent, INFINITE) != WAIT_OBJECT_0) {
-			printf("WaitForSingleObject failed (%d)\n", GetLastError());
-			break;
-		}
-		ResetEvent(gDoneEvent);
-		mainchInfo[row * coord.X + col].Char.AsciiChar = 0x20;
-		mainchInfo[row * coord.X + col].Attributes = 0x00;
-		if (col == coord.X - 1)
-			incr = -1;
-		else if (col == 0)
-			incr = 1;
-		col += incr;
-		mainchInfo[row * coord.X + col].Char.AsciiChar = '*';
-		mainchInfo[row * coord.X + col].Attributes = 0x0F;
-
-	} while (!_kbhit());
-
-	DeleteTimer();
-	return 0;
+	COORD Top;
+	COORD Bottom;
+} sRect;
+typedef struct sRect* pRect;
+void setPixel(COORD c, WCHAR symbol, CHAR_INFO* buff) {
+	buff[(c.Y) * consoleHeight + c.X].Char.UnicodeChar = symbol;
+	buff[(c.Y) * consoleHeight + c.X].Attributes = 0x0F;
 }
+void drawRec(sRect rec, CHAR_INFO* buff) {
 
+	size_t width = abs((rec.Top.X) - (rec.Bottom.X));
+	size_t height= abs((rec.Top.Y) - (rec.Bottom.Y));
+	setPixel(rec.Top, 0xC9, buff);
+	setPixel((COORD) { rec.Bottom.X, rec.Top.Y }, 0xBB, buff);
+	setPixel((COORD) { rec.Top.X, rec.Bottom.Y }, 0xC8, buff);
+	setPixel(rec.Bottom, 0xBC, buff);
 
-
-void InitProgram()
-{
-	sprintf_s(Caption,100,"Project PIK II, DEMO");
-	printf("%s", Caption);
-	mainchInfo = get_screen(&coord);
-	mainchInfo->Char.AsciiChar = 'K';
-	mainchInfo->Attributes = 12;
-	MainR.Left = 0;
-	MainR.Top = 0;
-	MainR.Right = coord.X;
-	MainR.Bottom = coord.Y;
-	SetConsoleCP(1251);
-	SetConsoleOutputCP(1251);
-	//init_console(KBValue);
-
+	for (size_t i = 1; i < width; i++)
+	{
+		setPixel((COORD) { rec.Top.X+i, rec.Top.Y }, 0xCD, buff);
+		setPixel((COORD) { rec.Bottom.X-i, rec.Bottom.Y }, 0xCD, buff);
+	}
+	for (size_t i = 1; i < height; i++)
+	{
+		setPixel((COORD) { rec.Top.X, rec.Top.Y + i }, 0xBA, buff);
+		setPixel((COORD) { rec.Bottom.X, rec.Bottom.Y - i }, 0xBA, buff);
+	}
 }
 
 
@@ -162,19 +100,16 @@ void set_cursor_visible(int Visible)
 	return;
 }
 
-void put_screen(COORD* cd, CHAR_INFO* buffer)
+void drawScreen()
 {
 	HANDLE hCons;
-	COORD c1;
-	//	SMALL_RECT rect;
-	CONSOLE_SCREEN_BUFFER_INFO ConsInfo;
 
 	hCons = GetStdHandle(STD_OUTPUT_HANDLE);
-	c1.X = 0;
-	c1.Y = 0;
-	GetConsoleScreenBufferInfo(hCons, &ConsInfo);
 
-	if (WriteConsoleOutput(hCons, buffer, *cd, c1, &ConsInfo.srWindow) == 0) {
+	COORD charBufSize = { consoleHeight, consoleWidth };
+	COORD characterPos = { 0, 0 };
+	SMALL_RECT writeArea = { 0, 0, consoleHeight, consoleWidth };
+	if (WriteConsoleOutputA(wHnd, charInfo, charBufSize, characterPos, &writeArea) == 0) {
 		printf("Failed writing\n");
 		return;
 	}
@@ -198,7 +133,7 @@ int GetKey()
 VOID CALLBACK TimerRoutine(PVOID lpParam, BOOLEAN TimerOrWaitFired)
 {
 
-	put_screen(&coord, mainchInfo);
+	drawScreen();
 
 	SetEvent(gDoneEvent);
 }
@@ -225,7 +160,7 @@ int SetTimer1()
 	}
 
 	// Set a timer to call the timer routine in 10 seconds.
-	if (!CreateTimerQueueTimer(&hTimer, hTimerQueue, (WAITORTIMERCALLBACK)TimerRoutine, NULL, 100, 100, 0)) // approx. 100 ms
+	if (!CreateTimerQueueTimer(&hTimer, hTimerQueue, (WAITORTIMERCALLBACK)TimerRoutine, NULL, 10, 10, 0)) // approx. 100 ms
 	{
 		printf("CreateTimerQueueTimer failed (%d)\n", GetLastError());
 		return 3;
@@ -243,3 +178,62 @@ void DeleteTimer()
 		printf("DeleteTimerQueue failed (%d)\n", GetLastError());
 }
 #pragma endregion
+
+int main(int argc, _TCHAR* argv[]) {
+	wHnd = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	SetConsoleTitle(TEXT("Win32 Console Control Demo"));
+
+	SMALL_RECT windowSize = { 0, 0, consoleWidth-1, consoleHeight-1 };
+
+	SetConsoleWindowInfo(wHnd, TRUE, &windowSize);
+
+	COORD bufferSize = { consoleWidth, consoleHeight };
+
+	SetConsoleScreenBufferSize(wHnd, bufferSize);
+
+	sRect a;
+	a.Top.Y = 4;
+	a.Top.X = 2;
+	a.Bottom.X = 30;
+	a.Bottom.Y = 20;
+	int i;
+	drawRec(a, charInfo);
+	drawScreen();
+	set_cursor_visible(0);
+	COORD speedV;
+	speedV.X = 1;
+	speedV.Y = 1;
+	SetTimer1();
+
+	int incrX=1;
+	int incrY = 1;
+	int width = abs(a.Top.X - a.Bottom.X);
+	int col = a.Top.X + 1;
+	int row = a.Top.Y + 1;
+	while (!_kbhit()) {
+		if (WaitForSingleObject(gDoneEvent, INFINITE) != WAIT_OBJECT_0) {
+			printf("WaitForSingleObject failed (%d)\n", GetLastError());
+			break;
+		}
+		ResetEvent(gDoneEvent);
+		setPixel((COORD) { col, row }, ' ', charInfo);
+		if (col == a.Bottom.X - 1)
+			incrX = -1;
+		else if (col == a.Top.X + 1)
+			incrX = 1;
+
+		if (row == a.Bottom.Y - 1)
+			incrY = -1;
+		else if (row == a.Top.Y + 1)
+			incrY = 1;
+
+		col += incrX * speedV.X;
+		row += incrY * speedV.Y;
+		setPixel((COORD) { col, row }, '*', charInfo);
+	}
+
+	DeleteTimer();
+	return 0;
+
+}
